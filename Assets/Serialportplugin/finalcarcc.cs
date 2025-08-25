@@ -111,15 +111,15 @@ public class CarControlHaptics : MonoBehaviour
         float lateralOut = Mathf.Clamp01(lateralToSide.Evaluate(normLat));
 
         // 5) Map to device strengths (apply hardware caps)
-        float backStrength = backMax * accelOut;   // accel → back push
-        float frontStrength = frontMax * brakeOut;   // brake → front belt
-        float sideStrength = sideMax * lateralOut; // corner → side belts
+        float backStrength = backMax * accelOut;   // accel --> back push
+        float frontStrength = frontMax * brakeOut;   // brake --> front belt
+        float sideStrength = sideMax * lateralOut; // corner --> side belts
 
         // pick left/right based on sign with a small deadband
         float leftStrength = (aLat > 0.25f) ? sideStrength : 0f;
         float rightStrength = (aLat < -0.25f) ? sideStrength : 0f;
 
-        // 6) Vibration amplitude from speed via curve (0..1 → 0..1)
+        // 6) Vibration amplitude from speed via curve (0..1 --> 0..1)
         float speedRatio = Mathf.Clamp01(vNow.magnitude / 80f); // ~0..288 km/h
         float ampOut = enableVibration ? Mathf.Clamp01(speedToVibe.Evaluate(speedRatio)) : 0f;
         float amplitude = vibrationAmplitude * ampOut;          // cap applied in FormatHaptic
