@@ -1,7 +1,8 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class WheelInputReader : MonoBehaviour
+public class InputManagerWheel : MonoBehaviour
+
 {
     public InputActionAsset inputActions;
     private InputAction steering;
