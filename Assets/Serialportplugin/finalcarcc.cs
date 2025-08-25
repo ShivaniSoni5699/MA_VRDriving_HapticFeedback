@@ -7,6 +7,13 @@ using System.Globalization; // for invariant formatting of numbers
 public class CarControlHaptics : MonoBehaviour
 
 {
+
+    [Header("Input Source")]
+    public InputManager sdkInputManager;              // old one (SDK + keyboard)
+    public InputManagerWheel inputSystemManager;      // new one (Unity Input System)
+    public bool useInputSystem = true;                // toggle in Inspector
+
+
     [Header("Vehicle (Car body)")]
     public Rigidbody carRb;
 
@@ -90,6 +97,28 @@ public class CarControlHaptics : MonoBehaviour
 
     void FixedUpdate()
     {
+        float motorInput, brakeInput, steerInput;
+        bool reverse;
+
+        if (useInputSystem && inputSystemManager != null)
+        {
+        motorInput = inputSystemManager.gasInput;
+        brakeInput = inputSystemManager.brakeInput;
+        steerInput = inputSystemManager.steerInput;
+        reverse    = inputSystemManager.reverseButtonPressed;
+        }
+        else if (sdkInputManager != null)
+        {
+        motorInput = sdkInputManager.gasInput;
+        brakeInput = sdkInputManager.brakeInput;
+        steerInput = sdkInputManager.steerInput;
+        reverse    = sdkInputManager.reverseButtonPressed;
+        }
+        else
+        {
+         return; // no input manager connected
+        }
+
         // 1) Acceleration a = dv/dt
         float dt = (Time.fixedDeltaTime > 0f) ? Time.fixedDeltaTime : 0.02f;
         Vector3 vNow = carRb.linearVelocity;
