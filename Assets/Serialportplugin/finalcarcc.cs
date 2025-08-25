@@ -202,4 +202,3 @@ public class CarControlHaptics : MonoBehaviour
         try { if (spRight != null && spRight.IsOpen) spRight.Close(); } catch { }
     }
 }
-
