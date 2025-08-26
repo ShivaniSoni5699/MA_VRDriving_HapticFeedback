@@ -8,14 +8,27 @@ public class CarControlHaptics : MonoBehaviour
 
 {
 
-    [Header("Input Source")]
-    public InputManager sdkInputManager;              // old one (SDK + keyboard)
-    public InputManagerWheel inputSystemManager;      // new one (Unity Input System)
-    public bool useInputSystem = true;                // toggle in Inspector
-
-
     [Header("Vehicle (Car body)")]
     public Rigidbody carRb;
+
+    [Header("Drive Tuning")]
+    [SerializeField, Tooltip("Max motor torque per driven wheel (N·m).")]
+    private float motorForce = 1500f;
+
+    [SerializeField, Tooltip("Max brake torque (N·m).")]
+    private float brakeForce = 3000f;
+
+    [SerializeField, Tooltip("Max steering angle (deg).")]
+    private float maxSteerAngle = 30f;
+
+    [SerializeField, Tooltip("Reverse torque factor (0..1).")]
+    private float reverseFactor = 0.6f;
+
+    [SerializeField, Tooltip("Rear-wheel drive if true; if false, all-wheel drive.")]
+    private bool rearWheelDrive = true;
+
+
+    // -----------------------HAptics------------------------
 
     [Header("Haptic devices (COM ports)")]
     public bool useFront = true; public string frontPort = "COM7";   // forward pull (braking)
@@ -26,7 +39,7 @@ public class CarControlHaptics : MonoBehaviour
 
     //Commented header and also changed public variables to private 
     //[Header("Send rate limiting")]
-    private readonly float maxSendHz = 60f;
+    private readonly float maxSendHz = 30f;
 
     //[Header("AMG GT R reference (real-world)")]
     private float accelForFullBack = 8.0f;   // ~0.87 g full throttle
@@ -69,16 +82,39 @@ public class CarControlHaptics : MonoBehaviour
     private Vector3 prevVelocity; //car’s velocity from the last physics frame
     private float lastSendFront, lastSendBack, lastSendLeft, lastSendRight;
 
+
+    // -------------- UNITY LIFECYCLE --------------
     //Start(): open ports + init
     void Start()
     {
         if (carRb == null)
         {
             Debug.LogError("[HAPTIC] Please assign carRb (Rigidbody).");
-            enabled = false; return;
+            enabled = false;
+            return;
         }
+            accelToBack = new AnimationCurve(
+            new Keyframe(0f,0f), new Keyframe(0.15f,0.05f),
+            new Keyframe(0.40f,0.25f), new Keyframe(0.70f,0.60f),
+            new Keyframe(1f,1f)
+             );
+            brakeToFront = new AnimationCurve(
+            new Keyframe(0f,0f), new Keyframe(0.10f,0.20f),
+            new Keyframe(0.40f,0.60f), new Keyframe(0.70f,0.90f),
+            new Keyframe(1f,1f)
+             );
+            lateralToSide = new AnimationCurve(
+            new Keyframe(0f,0f), new Keyframe(0.20f,0.05f),
+            new Keyframe(0.50f,0.35f), new Keyframe(0.80f,0.85f),
+            new Keyframe(1f,1f)
+            );
+             speedToVibe = new AnimationCurve(
+            new Keyframe(0f,0f), new Keyframe(0.25f,0.10f),
+            new Keyframe(0.50f,0.30f), new Keyframe(0.80f,0.60f),
+            new Keyframe(1f,0.80f)
+            );
 
-        // remember current velocity so first frame accel isn’t huge
+        // to remember current velocity so first frame accel is not huge
         prevVelocity = carRb.linearVelocity;
 
         // open any enabled device
@@ -97,27 +133,6 @@ public class CarControlHaptics : MonoBehaviour
 
     void FixedUpdate()
     {
-        float motorInput, brakeInput, steerInput;
-        bool reverse;
-
-        if (useInputSystem && inputSystemManager != null)
-        {
-        motorInput = inputSystemManager.gasInput;
-        brakeInput = inputSystemManager.brakeInput;
-        steerInput = inputSystemManager.steerInput;
-        reverse    = inputSystemManager.reverseButtonPressed;
-        }
-        else if (sdkInputManager != null)
-        {
-        motorInput = sdkInputManager.gasInput;
-        brakeInput = sdkInputManager.brakeInput;
-        steerInput = sdkInputManager.steerInput;
-        reverse    = sdkInputManager.reverseButtonPressed;
-        }
-        else
-        {
-         return; // no input manager connected
-        }
 
         // 1) Acceleration a = dv/dt
         float dt = (Time.fixedDeltaTime > 0f) ? Time.fixedDeltaTime : 0.02f;
