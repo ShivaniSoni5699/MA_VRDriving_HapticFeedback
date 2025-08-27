@@ -99,10 +99,12 @@ public class CarControlHaptics : MonoBehaviour
             new Keyframe(1f,1f)
              );
             brakeToFront = new AnimationCurve(
-            new Keyframe(0f,0f), new Keyframe(0.10f,0.20f),
-            new Keyframe(0.40f,0.60f), new Keyframe(0.70f,0.90f),
-            new Keyframe(1f,1f)
-             );
+            new Keyframe(0f,   0f),   // no brake → no pull
+            new Keyframe(0.05f,0.20f),// tiny brake → already some pull
+            new Keyframe(0.30f,0.55f),
+            new Keyframe(0.60f,0.85f),
+            new Keyframe(1f,   1f)    // full brake → max pull
+);
             lateralToSide = new AnimationCurve(
             new Keyframe(0f,0f), new Keyframe(0.20f,0.05f),
             new Keyframe(0.50f,0.35f), new Keyframe(0.80f,0.85f),
@@ -133,6 +135,8 @@ public class CarControlHaptics : MonoBehaviour
 
     void FixedUpdate()
     {
+
+
 
         // 1) Acceleration a = dv/dt
         float dt = (Time.fixedDeltaTime > 0f) ? Time.fixedDeltaTime : 0.02f;
@@ -174,6 +178,8 @@ public class CarControlHaptics : MonoBehaviour
         RateLimitedSend(spBack, ref lastSendBack, backStrength, amplitude, frequency, "Back", aLong);
         RateLimitedSend(spLeft, ref lastSendLeft, leftStrength, amplitude, frequency, "Left", aLat);
         RateLimitedSend(spRight, ref lastSendRight, rightStrength, amplitude, frequency, "Right", aLat);
+        
+        
     }
 
     // Open a serial port; returns null if it fails (we keep running without it)
