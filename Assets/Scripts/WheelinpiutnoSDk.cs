@@ -2,37 +2,43 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class InputManagerWheel : MonoBehaviour
-
 {
+    [Header("Input System Asset")]
     public InputActionAsset inputActions;
+
     private InputAction steering;
     private InputAction gas;
     private InputAction brake;
     private InputAction clutch;
     private InputAction reverseButton;
 
-    [Header("Deadzones")]
-    public float gasDeadzone = 0.2f;
-    public float brakeDeadzone = 0.2f;
-    public float clutchDeadzone = 0.2f;
+    // Same outputs as your old InputManager (CarControl expects these)
+    [HideInInspector] public float gasInput;     // 0..1
+    [HideInInspector] public float brakeInput;   // 0..1
+    [HideInInspector] public float clutchInput;  // 0..1
+    [HideInInspector] public float steerInput;   // -1..+1
+    [HideInInspector] public bool reverseButtonPressed;
 
-    [Header("Live Outputs (Read Only)")]
-    [SerializeField] private float steeringValue;
-    [SerializeField] private float gasValue;
-    [SerializeField] private float brakeValue;
-    [SerializeField] private float clutchValue;
-    [SerializeField] private bool isReversing;
+    [Header("Deadzones")]
+    [Range(0f, 0.5f)] public float pedalDeadzone = 0.15f;
+    [Range(0f, 0.2f)] public float steerDeadzone = 0.03f;
+
+    [Header("Debug (Read-Only)")]
+    [SerializeField] private float gasDisplay;
+    [SerializeField] private float brakeDisplay;
+    [SerializeField] private float clutchDisplay;
+    [SerializeField] private float steerDisplay;
+    [SerializeField] private bool reverseDisplay;
 
     void OnEnable()
     {
+        // Look for the action map called "Driving" in your InputActionAsset
         var map = inputActions.FindActionMap("Driving");
-
         steering      = map.FindAction("Steering");
         gas           = map.FindAction("Gas");
         brake         = map.FindAction("Brake");
         clutch        = map.FindAction("Clutch");
         reverseButton = map.FindAction("Reverse");
-
         map.Enable();
     }
 
@@ -47,18 +53,24 @@ public class InputManagerWheel : MonoBehaviour
 
     void Update()
     {
-        steeringValue = steering.ReadValue<float>();
-        gasValue      = ApplyDeadzone(gas.ReadValue<float>(), gasDeadzone);
-        brakeValue    = ApplyDeadzone(brake.ReadValue<float>(), brakeDeadzone);
-        clutchValue   = ApplyDeadzone(clutch.ReadValue<float>(), clutchDeadzone);
-        isReversing   = reverseButton.ReadValue<float>() > 0.5f;
+        // Read values directly from Input System
+        float rawGas    = gas.ReadValue<float>();
+        float rawBrake  = brake.ReadValue<float>();
+        float rawClutch = clutch.ReadValue<float>();
+        float rawSteer  = steering.ReadValue<float>();
 
-        // 🔎 Print values each frame
-        Debug.Log($"[Wheel Input] Steering={steeringValue:F2} | Gas={gasValue:F2} | Brake={brakeValue:F2} | Clutch={clutchValue:F2} | Reverse={isReversing}");
-    }
+        gasInput    = (rawGas   > pedalDeadzone) ? rawGas   : 0f;
+        brakeInput  = (rawBrake > pedalDeadzone) ? rawBrake : 0f;
+        clutchInput = (rawClutch > pedalDeadzone) ? rawClutch : 0f;
+        steerInput  = (Mathf.Abs(rawSteer) > steerDeadzone) ? rawSteer : 0f;
 
-    float ApplyDeadzone(float value, float threshold)
-    {
-        return Mathf.Abs(value) < threshold ? 0f : value;
+        reverseButtonPressed = reverseButton.ReadValue<float>() > 0.5f;
+
+        // Debug mirror for Inspector
+        gasDisplay     = gasInput;
+        brakeDisplay   = brakeInput;
+        clutchDisplay  = clutchInput;
+        steerDisplay   = steerInput;
+        reverseDisplay = reverseButtonPressed;
     }
 }
