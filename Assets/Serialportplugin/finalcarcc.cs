@@ -27,6 +27,8 @@ public class CarControlHaptics : MonoBehaviour
     [SerializeField, Tooltip("Rear-wheel drive if true; if false, all-wheel drive.")]
     private bool rearWheelDrive = true;
 
+    
+
 
     // -----------------------HAptics------------------------
 
@@ -39,7 +41,7 @@ public class CarControlHaptics : MonoBehaviour
 
     //Commented header and also changed public variables to private 
     //[Header("Send rate limiting")]
-    private readonly float maxSendHz = 30f;
+    public float maxSendHz = 10f;
 
     //[Header("AMG GT R reference (real-world)")]
     private float accelForFullBack = 8.0f;   // ~0.87 g full throttle
@@ -48,7 +50,7 @@ public class CarControlHaptics : MonoBehaviour
 
     //[Header("Strength Caps")]
     private float frontMax = 2.0f; // max forward pull belt
-    private float backMax = 0.6f; // max backward push motor
+    private float backMax = 1.3f; // max backward push motor
     private float sideMax = 1.1f; // max side belt pull
 
 
@@ -94,10 +96,14 @@ public class CarControlHaptics : MonoBehaviour
             return;
         }
             accelToBack = new AnimationCurve(
-            new Keyframe(0f,0f), new Keyframe(0.15f,0.05f),
-            new Keyframe(0.40f,0.25f), new Keyframe(0.70f,0.60f),
-            new Keyframe(1f,1f)
-             );
+            new Keyframe(0.00f, 0.00f),
+            new Keyframe(0.10f, 0.20f),
+            new Keyframe(0.30f, 0.55f),
+            new Keyframe(0.50f, 0.85f),
+            new Keyframe(0.75f, 1.00f),
+            new Keyframe(1.00f,1.00f)
+        );
+
             brakeToFront = new AnimationCurve(
             new Keyframe(0f,   0f),   // no brake → no pull
             new Keyframe(0.05f,0.20f),// tiny brake → already some pull
@@ -221,6 +227,7 @@ public class CarControlHaptics : MonoBehaviour
                          float force, float amplitude, float frequency,
                          string deviceName, float accelShown)
     {
+        
         if (sp == null || !sp.IsOpen) return;
 
         float minInterval = 1f / Mathf.Max(1f, maxSendHz);
