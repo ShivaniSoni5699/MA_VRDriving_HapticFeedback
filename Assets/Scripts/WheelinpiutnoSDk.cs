@@ -6,13 +6,9 @@ public class InputManagerWheel : MonoBehaviour
     [Header("Input System Asset")]
     public InputActionAsset inputActions;
 
-    private InputAction steering;
-    private InputAction gas;
-    private InputAction brake;
-    private InputAction clutch;
-    private InputAction reverseButton;
+    private InputAction steering, gas, brake, clutch, reverseButton;
 
-    // Same outputs as your old InputManager (CarControl expects these)
+    // Car controller expects these fields:
     [HideInInspector] public float gasInput;     // 0..1
     [HideInInspector] public float brakeInput;   // 0..1
     [HideInInspector] public float clutchInput;  // 0..1
@@ -20,19 +16,16 @@ public class InputManagerWheel : MonoBehaviour
     [HideInInspector] public bool reverseButtonPressed;
 
     [Header("Deadzones")]
-    [Range(0f, 0.5f)] public float pedalDeadzone = 0.15f;
+    [Range(0f, 0.5f)] public float pedalDeadzone = 0.20f;
     [Range(0f, 0.2f)] public float steerDeadzone = 0.03f;
 
-    [Header("Debug (Read-Only)")]
-    [SerializeField] private float gasDisplay;
-    [SerializeField] private float brakeDisplay;
-    [SerializeField] private float clutchDisplay;
-    [SerializeField] private float steerDisplay;
-    [SerializeField] private bool reverseDisplay;
+    [Header("Invert (use if a pedal reads ~1.0 at rest)")]
+    public bool invertGas   = false;
+    public bool invertBrake = false;
+    public bool invertClutch= false;
 
     void OnEnable()
     {
-        // Look for the action map called "Driving" in your InputActionAsset
         var map = inputActions.FindActionMap("Driving");
         steering      = map.FindAction("Steering");
         gas           = map.FindAction("Gas");
@@ -44,33 +37,42 @@ public class InputManagerWheel : MonoBehaviour
 
     void OnDisable()
     {
-        steering?.Disable();
-        gas?.Disable();
-        brake?.Disable();
-        clutch?.Disable();
-        reverseButton?.Disable();
+        steering?.Disable(); gas?.Disable(); brake?.Disable(); clutch?.Disable(); reverseButton?.Disable();
     }
 
     void Update()
     {
-        // Read values directly from Input System
+        // Raw values may be in [-1..+1], [0..1], or reversed [1..0] depending on device
+        float rawSteer  = steering.ReadValue<float>();
         float rawGas    = gas.ReadValue<float>();
         float rawBrake  = brake.ReadValue<float>();
         float rawClutch = clutch.ReadValue<float>();
-        float rawSteer  = steering.ReadValue<float>();
 
-        gasInput    = (rawGas   > pedalDeadzone) ? rawGas   : 0f;
-        brakeInput  = (rawBrake > pedalDeadzone) ? rawBrake : 0f;
-        clutchInput = (rawClutch > pedalDeadzone) ? rawClutch : 0f;
-        steerInput  = (Mathf.Abs(rawSteer) > steerDeadzone) ? rawSteer : 0f;
+        gasInput    = NormalizePedal(rawGas,   invertGas,   pedalDeadzone);   // -> 0..1
+        brakeInput  = NormalizePedal(rawBrake, invertBrake, pedalDeadzone);   // -> 0..1
+        clutchInput = NormalizePedal(rawClutch,invertClutch,pedalDeadzone);   // -> 0..1
+
+        steerInput  = ApplySteerDeadzone(rawSteer, steerDeadzone);            // keep -1..+1
 
         reverseButtonPressed = reverseButton.ReadValue<float>() > 0.5f;
+    }
 
-        // Debug mirror for Inspector
-        gasDisplay     = gasInput;
-        brakeDisplay   = brakeInput;
-        clutchDisplay  = clutchInput;
-        steerDisplay   = steerInput;
-        reverseDisplay = reverseButtonPressed;
+    float NormalizePedal(float raw, bool invert, float dz)
+    {
+        // Map [-1..+1] to [0..1] if needed
+        float v01 = (raw >= -1f && raw <= 1f) ? 0.5f * (raw + 1f) : Mathf.Clamp01(raw);
+        if (invert) v01 = 1f - v01;
+
+        // Deadzone at the low end
+        if (v01 <= dz) return 0f;
+        return (v01 - dz) / (1f - dz);
+    }
+
+    float ApplySteerDeadzone(float raw, float dz)
+    {
+        raw = Mathf.Clamp(raw, -1f, 1f);
+        if (Mathf.Abs(raw) < dz) return 0f;
+        // rescale so you still get full lock after the deadzone
+        return Mathf.Sign(raw) * Mathf.InverseLerp(dz, 1f, Mathf.Abs(raw));
     }
 }
