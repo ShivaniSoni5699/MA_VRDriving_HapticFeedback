@@ -1,145 +1,233 @@
 using UnityEngine;
 
+[DisallowMultipleComponent]
 public class CarAudio : MonoBehaviour
 {
-    [Header("Assign clips")]
-    public AudioSource startOneShot;   // one-shot
-    public AudioSource idleLoop;       // loop
-    public AudioSource engineLoop;     // loop
-    public AudioSource reverseLoop;    // loop
-    public AudioSource brakeOneShot;   // one-shot
+    [Header("Engine layers (assign your 4 loops)")]
+    public AudioClip lowAccelClip, lowDecelClip, highAccelClip, highDecelClip;
 
-    [Header("tuning")]
-    [Range(0f,1f)] public float idleVolume   = 0.15f; // how loud idle is
-    public float accelRef     = 6f;                   // m/s² that feels like “full gas”
-    public float brakeGate    = 1.2f;                 // m/s² decel to auto fire brake SFX
-    public float inputDeadzone= 0.14f;                // ignores tiny pedal jitter
+    [Header("Optional SFX")]
+    public AudioClip startClip, idleClip, reverseClip, brakeClip;
 
-    [Header("Physics")]
-    public Rigidbody rb;                               // auto-found if on car root
+    [Header("Tuning")]
+    [Range(0f,1f)] public float idleVolume = 0.15f;
+    public float accelRef = 6f;
+    public float pitchMin = 0.9f, pitchMax = 1.6f;
+    public float speedForMaxPitch = 40f;     // m/s for max pitch (set ≈ top speed / 3.6)
+    public float reverseMinSpeed = 0.6f, reverseHysteresis = 0.3f;
+    public float brakeMinSpeed = 1.0f, brakeCooldown = 0.35f;
+    public float inputDeadzone = 0.13f;
 
-    // ---- fixed “sane” constants (not shown in Inspector) ----
-    const float idleSpeed   = 0.6f;   // m/s considered stopped
-    const float engStart    = 0.2f;   // keeps engine alive when slightly rolling
-    const float revMinSpeed = 0.6f;   // reverse audible only past this
-    const float fade        = 8f;     // how fast volumes/pitches chase
-    const float shotCDMin   = 0.35f;  // min cooldown for brake one-shot
-    const float impactGate  = 4f;     // m/s relative vel = impact (mute brakes briefly)
-    const float impactMute  = 0.5f;   // s to ignore brake after impact
+    [Header("Equalizer (drag the one on the Camera/AudioListener)")]
+    public SEF_Equalizer eq;                 // MUST be on the AudioListener
+    public float eqStartOffset = 0.35f, eqLerpSpeed = 15f;
 
-    // ---- runtime ----
-    float prevFwd, prevAbs, a01, lastBrakeShot=-999f, lastImpact=-999f, prevBrake01;
+    [Header("References (set ONE)")]
+    public Transform carRoot;
+    public Rigidbody rb;
+
+    // ---- internals ----
+    const float fade = 8f, idleSpeed = 0.6f, engStart = 0.2f;
+    float prevFwd, prevAbs, load01, lastBrake=-999f, prevBrake01;
+    bool reverseActive;
+
+    // created sources (2D, doppler 0)
+    AudioSource sLowAcc, sLowDec, sHighAcc, sHighDec, sIdle, sRev, sStart, sBrake;
+
+    // ----- lifecycle -----
     void Awake()
     {
-        if (!rb) rb = GetComponent<Rigidbody>();
-        PrepLoop(idleLoop); PrepLoop(engineLoop); PrepLoop(reverseLoop);
-        PrepShot(startOneShot); PrepShot(brakeOneShot);
-    }
-    void Start()
-    {
-        if (startOneShot && startOneShot.clip) startOneShot.Play();
-        PlayIfClip(idleLoop); PlayIfClip(engineLoop); PlayIfClip(reverseLoop);
+        if (!rb && carRoot) rb = carRoot.GetComponent<Rigidbody>();
+        if (!rb && transform.root) rb = transform.root.GetComponent<Rigidbody>();
 
-        var v = rb ? rb.linearVelocity : Vector3.zero;
-        prevFwd = Vector3.Dot(v, transform.forward);
+        // Clean any leftover CA_* sources (prevents stacking across play sessions)
+        CleanupOldSources();
+
+        // Create sources (or replace if missing)
+        sLowAcc  = MakeLoop("CA_lowAcc",  lowAccelClip);
+        sLowDec  = MakeLoop("CA_lowDec",  lowDecelClip);
+        sHighAcc = MakeLoop("CA_highAcc", highAccelClip);
+        sHighDec = MakeLoop("CA_highDec", highDecelClip);
+
+        sIdle  = MakeLoop("CA_idle",   idleClip);
+        sRev   = MakeLoop("CA_reverse",reverseClip);
+        sStart = MakeShot("CA_start",  startClip);
+        sBrake = MakeShot("CA_brake",  brakeClip);
+
+        if (sStart && sStart.clip) sStart.Play();   // only Start at spawn
+
+        if (!eq) eq = FindObjectOfType<SEF_Equalizer>(); // should be on the AudioListener
+        if (eq) { eq.filterOn = true; eq.lowFreq = 1f; eq.midFreq = eqStartOffset; eq.highFreq = eqStartOffset; }
+
+        Vector3 v = rb ? GetVel(rb) : Vector3.zero;
+        prevFwd = Vector3.Dot(v, GetForward());
         prevAbs = Mathf.Abs(prevFwd);
     }
+
     void Update()
     {
         float dt = Mathf.Max(Time.deltaTime, 1e-4f);
 
-        // --- Inputs: G923 via Input System (if present) + keyboard fallback ---
-        float throttle01, brake01; ReadThrottleBrake(out throttle01, out brake01);
+        // Inputs (keyboard + wheel via Input System if present)
+        float throttle01 = ReadThrottle();
+        float brake01    = ReadBrake();
         throttle01 = Deadzone(throttle01, inputDeadzone);
         brake01    = Deadzone(brake01,    inputDeadzone);
 
-        // --- Kinematics ---
-        Vector3 vel = rb ? rb.linearVelocity : Vector3.zero;
-        float fwd = Vector3.Dot(vel, transform.forward);
+        // Kinematics
+        Vector3 fwdDir = GetForward();
+        Vector3 vel = rb ? GetVel(rb) : Vector3.zero;
+        float fwd = Vector3.Dot(vel, fwdDir);
         float spd = Mathf.Abs(fwd);
         float acc = (fwd - prevFwd) / dt; prevFwd = fwd;
 
-        // --- Smooth “engine demand”: physics accel OR throttle intent ---
+        // Engine LOAD (accel vs decel)
         float physA01 = Mathf.Clamp01(acc / Mathf.Max(0.001f, accelRef));
-        float target  = Mathf.Max(physA01, throttle01);
-        a01 += (target - a01) * (1f - Mathf.Exp(-dt * 8f));
+        float targetLoad = Mathf.Max(physA01, throttle01);
+        load01 += (targetLoad - load01) * (1f - Mathf.Exp(-dt * 8f));
 
-        // ---------- Idle ----------
-        if (idleLoop)
+        // Pitch proxy from speed
+        float rpm01 = Mathf.Clamp01(spd / Mathf.Max(1f, speedForMaxPitch));
+        float pitch = Mathf.Lerp(pitchMin, pitchMax, rpm01);
+
+        // Reverse with hysteresis
+        if (!reverseActive && fwd <= -reverseMinSpeed - reverseHysteresis) reverseActive = true;
+        else if (reverseActive && fwd >= -reverseMinSpeed + reverseHysteresis) reverseActive = false;
+
+        // Engine gate (no engine at spawn; mute while reversing)
+        bool engineOn = (throttle01 > 0.05f) || (spd > engStart);
+        bool muteEngine = !engineOn || reverseActive;
+
+        // 4-layer blend
+        SetPitch(sLowAcc,  pitch);
+        SetPitch(sLowDec,  pitch);
+        SetPitch(sHighAcc, pitch * (0.25f + 0.75f * rpm01));
+        SetPitch(sHighDec, sHighAcc ? sHighAcc.pitch : pitch);
+
+        float highFade = Ease(Mathf.InverseLerp(0.2f, 0.8f, rpm01));
+        float lowFade  = Ease(1f - Mathf.InverseLerp(0.2f, 0.8f, rpm01));
+        float accFade  = Ease(load01);
+        float decFade  = Ease(1f - load01);
+        float baseVol  = Mathf.Lerp(0.2f, 1f, rpm01);
+
+        if (!muteEngine)
         {
-            bool wantIdle = (throttle01 == 0f && brake01 == 0f && spd < idleSpeed);
-            float tv = wantIdle ? idleVolume : 0f;
-            idleLoop.volume = Mathf.MoveTowards(idleLoop.volume, tv, dt * fade);
+            SetVol(sLowAcc,  baseVol * lowFade  * accFade, dt);
+            SetVol(sHighAcc, baseVol * highFade * accFade, dt);
+            SetVol(sLowDec,  baseVol * lowFade  * decFade, dt);
+            SetVol(sHighDec, baseVol * highFade * decFade, dt);
+        }
+        else
+        {
+            SetVol(sLowAcc,0f,dt); SetVol(sHighAcc,0f,dt);
+            SetVol(sLowDec,0f,dt); SetVol(sHighDec,0f,dt);
         }
 
-        // ---------- Reverse (only when actually moving backward) ----------
-        if (reverseLoop)
+        // Idle
+        if (sIdle)
         {
-            bool reversing = (fwd < -revMinSpeed);
-            float r01 = reversing ? Mathf.Clamp01((Mathf.Abs(fwd) - revMinSpeed) / 10f) : 0f;
-            reverseLoop.volume = Mathf.MoveTowards(reverseLoop.volume, Mathf.Lerp(0f, 0.8f, r01), dt * fade);
-            reverseLoop.pitch  = Mathf.MoveTowards(reverseLoop.pitch,  Mathf.Lerp(0.9f, 1.3f,  r01), dt * fade);
+            bool wantIdle = (throttle01 == 0f && brake01 == 0f && spd < idleSpeed && !reverseActive);
+            sIdle.volume = Mathf.MoveTowards(sIdle.volume, wantIdle ? idleVolume : 0f, dt * fade);
         }
 
-        // ---------- Brake one-shot (edge + big decel; no loop) ----------
-        float decelAbs = Mathf.Max(0f, (prevAbs - spd) / dt); prevAbs = spd;
-        bool brakeEdge = (brake01 > 0.6f && prevBrake01 <= 0.6f); prevBrake01 = brake01;
-        bool notImpact = (Time.time - lastImpact) > impactMute;
-        float shotCD   = (brakeOneShot && brakeOneShot.clip)
-                         ? Mathf.Max(shotCDMin, brakeOneShot.clip.length * 0.85f)
-                         : shotCDMin;
-
-        bool canShot = brakeOneShot && brakeOneShot.clip && spd > 1.0f &&
-                       (brakeEdge || (decelAbs > brakeGate && fwd > 0.2f && notImpact)) &&
-                       (Time.time - lastBrakeShot) > shotCD;
-
-        if (canShot) { brakeOneShot.Play(); lastBrakeShot = Time.time; }
-
-        // ---------- Engine (forward only; reverse sound owns backward motion) ----------
-        if (engineLoop)
+        // Reverse
+        if (sRev)
         {
-            bool reversingNow = (fwd < -revMinSpeed);
-            bool on = !reversingNow && (a01 > 0.04f || spd > engStart);
-            float v = on ? Mathf.Clamp01(0.8f * a01) : 0f;
-            engineLoop.volume = Mathf.MoveTowards(engineLoop.volume, v, dt * fade);
-            float p01 = Mathf.Clamp01(0.85f*a01 + 0.15f*(spd/40f));
-            engineLoop.pitch = Mathf.MoveTowards(engineLoop.pitch, Mathf.Lerp(0.9f, 1.6f, p01), dt * fade);
+            float r01 = reverseActive ? Mathf.Clamp01((Mathf.Abs(fwd) - reverseMinSpeed) / 10f) : 0f;
+            sRev.volume = Mathf.MoveTowards(sRev.volume, Mathf.Lerp(0f, 0.8f, r01), dt * fade);
+            sRev.pitch  = Mathf.MoveTowards(sRev.pitch,  Mathf.Lerp(0.9f, 1.3f, r01), dt * fade);
         }
+
+        // Brake (edge only)
+        bool edge = (brake01 > 0.6f && prevBrake01 <= 0.6f); prevBrake01 = brake01;
+        bool canBrake = sBrake && sBrake.clip && spd > brakeMinSpeed &&
+                        edge && (Time.time - lastBrake) > brakeCooldown;
+        if (canBrake) { sBrake.PlayOneShot(sBrake.clip, 1f); lastBrake = Time.time; }
+
+        // EQ follows LOAD
+        if (eq)
+        {
+            float target = eqStartOffset + load01 / 1.5f;
+            eq.midFreq  = Mathf.Lerp(eq.midFreq,  target, eqLerpSpeed * dt);
+            eq.highFreq = Mathf.Lerp(eq.highFreq, target, eqLerpSpeed * dt);
+            eq.lowFreq  = 1f;
+        }
+
+        prevAbs = spd;
     }
 
-    // ---- Impact mute so crashes don’t sound like “brake” ----
-    void OnCollisionEnter(Collision c)
+    // ----- helpers -----
+    void CleanupOldSources()
     {
-        if (c.relativeVelocity.magnitude > impactGate) lastImpact = Time.time;
+        var all = GetComponents<AudioSource>();
+        foreach (var s in all)
+        {
+            if (!s) continue;
+            if (s.name.StartsWith("CA_")) DestroyImmediate(s); // nuke our old ones
+        }
     }
 
-    // ---- helpers ----
-    void PrepLoop(AudioSource s){ if(!s)return; s.playOnAwake=false; s.loop=true;  s.spatialBlend=0f; s.dopplerLevel=0f; s.volume=0f; s.Stop(); }
-    void PrepShot(AudioSource s){ if(!s)return; s.playOnAwake=false; s.loop=false; s.spatialBlend=0f; s.dopplerLevel=0f; s.Stop(); }
-    void PlayIfClip(AudioSource s){ if(s && s.clip && !s.isPlaying) s.Play(); }
+    AudioSource MakeLoop(string name, AudioClip clip)
+    {
+        if (!clip) return null;
+        var s = gameObject.AddComponent<AudioSource>();
+        s.name = name; s.clip = clip; s.loop = true; s.playOnAwake = false;
+        s.spatialBlend = 0f; s.dopplerLevel = 0f; s.volume = 0f;
+        s.time = Random.Range(0f, Mathf.Max(0.01f, clip.length)); s.Play();
+        return s;
+    }
+    AudioSource MakeShot(string name, AudioClip clip)
+    {
+        if (!clip) return null;
+        var s = gameObject.AddComponent<AudioSource>();
+        s.name = name; s.clip = clip; s.loop = false; s.playOnAwake = false;
+        s.spatialBlend = 0f; s.dopplerLevel = 0f; if (clip) clip.LoadAudioData();
+        return s;
+    }
+
+    static float Ease(float x){ return 1f - (1f - x) * (1f - x); }
+    static void  SetPitch(AudioSource s, float p){ if (s) s.pitch = p; }
+    static void  SetVol  (AudioSource s, float v, float dt){ if (s) s.volume = Mathf.MoveTowards(s.volume, v, dt * fade); }
     static float Deadzone(float x, float dz) => (Mathf.Abs(x) < dz) ? 0f : Mathf.Clamp01(x);
 
-    void ReadThrottleBrake(out float th, out float br)
+    float ReadThrottle()
     {
-        th = 0f; br = 0f;
+        float t = 0f;
 #if ENABLE_INPUT_SYSTEM
         var pad = UnityEngine.InputSystem.Gamepad.current;
-        if (pad != null){ th = Mathf.Max(th, Mathf.Clamp01(pad.rightTrigger.ReadValue())); br = Mathf.Max(br, Mathf.Clamp01(pad.leftTrigger.ReadValue())); }
-        foreach (var d in UnityEngine.InputSystem.InputSystem.devices)
-        {
-            var a = d.TryGetChildControl<UnityEngine.InputSystem.Controls.AxisControl>("accelerator");
-            var t = d.TryGetChildControl<UnityEngine.InputSystem.Controls.AxisControl>("throttle");
-            var b = d.TryGetChildControl<UnityEngine.InputSystem.Controls.AxisControl>("brake");
-            if (a!=null) th = Mathf.Max(th, Mathf.Clamp01(a.ReadValue()));
-            if (t!=null) th = Mathf.Max(th, Mathf.Clamp01(t.ReadValue()));
-            if (b!=null) br = Mathf.Max(br, Mathf.Clamp01(b.ReadValue()));
+        if (pad != null) t = Mathf.Max(t, Mathf.Clamp01(pad.rightTrigger.ReadValue()));
+        foreach (var d in UnityEngine.InputSystem.InputSystem.devices){
+            var a=d.TryGetChildControl<UnityEngine.InputSystem.Controls.AxisControl>("accelerator");
+            var th=d.TryGetChildControl<UnityEngine.InputSystem.Controls.AxisControl>("throttle");
+            if (a!=null) t = Mathf.Max(t, Mathf.Clamp01(a.ReadValue()));
+            if (th!=null) t= Mathf.Max(t, Mathf.Clamp01(th.ReadValue()));
         }
 #endif
-        if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) th = 1f;
-        if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.Space)) br = 1f;
+        if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) t = 1f;
+        return Mathf.Clamp01(t);
+    }
+    float ReadBrake()
+    {
+        float b = 0f;
+#if ENABLE_INPUT_SYSTEM
+        var pad = UnityEngine.InputSystem.Gamepad.current;
+        if (pad != null) b = Mathf.Max(b, Mathf.Clamp01(pad.leftTrigger.ReadValue()));
+        foreach (var d in UnityEngine.InputSystem.InputSystem.devices){
+            var br=d.TryGetChildControl<UnityEngine.InputSystem.Controls.AxisControl>("brake");
+            if (br!=null) b = Mathf.Max(b, Mathf.Clamp01(br.ReadValue()));
+        }
+#endif
+        if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.Space)) b = 1f;
+        return Mathf.Clamp01(b);
+    }
 
-        // If your G923 pedals are inverted (0 when pressed), flip here:
-        // th = 1f - th; br = 1f - br;
-        th = Mathf.Clamp01(th); br = Mathf.Clamp01(br);
+    Vector3 GetForward(){ return carRoot ? carRoot.forward : (rb ? rb.transform.forward : transform.forward); }
+    static Vector3 GetVel(Rigidbody body)
+    {
+#if UNITY_6000_0_OR_NEWER
+        return body ? body.linearVelocity : Vector3.zero;
+#else
+        return body ? body.velocity : Vector3.zero;
+#endif
     }
 }
