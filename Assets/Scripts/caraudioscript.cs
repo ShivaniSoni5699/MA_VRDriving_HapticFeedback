@@ -3,7 +3,7 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class CarAudio : MonoBehaviour
 {
-    [Header("Engine layers (assign your 4 loops)")]
+    [Header("Engine layers ")]
     public AudioClip lowAccelClip, lowDecelClip, highAccelClip, highDecelClip;
 
     [Header("Optional SFX")]
@@ -131,12 +131,23 @@ public class CarAudio : MonoBehaviour
         }
 
         // Reverse
+       // Reverse (plays only if: moving backwards AND gas pressed AND Button 6 held)
         if (sRev)
         {
-            float r01 = reverseActive ? Mathf.Clamp01((Mathf.Abs(fwd) - reverseMinSpeed) / 10f) : 0f;
+            
+            // change to KeyCode.JoystickButton6 maybe
+            bool reverseBtn = Input.GetKey(KeyCode.JoystickButton5) || Input.GetKey(KeyCode.R);
+
+            // tiny gas threshold so micro noise doesn't trigger it
+            bool gas = throttle01 > 0.06f;
+
+            bool ok = reverseActive && reverseBtn && gas;
+            float r01 = ok ? Mathf.Clamp01((Mathf.Abs(fwd) - reverseMinSpeed) / 10f) : 0f;
+
             sRev.volume = Mathf.MoveTowards(sRev.volume, Mathf.Lerp(0f, 0.8f, r01), dt * fade);
             sRev.pitch  = Mathf.MoveTowards(sRev.pitch,  Mathf.Lerp(0.9f, 1.3f, r01), dt * fade);
         }
+
 
         // Brake (edge only)
         bool edge = (brake01 > 0.6f && prevBrake01 <= 0.6f); prevBrake01 = brake01;
