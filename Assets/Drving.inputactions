@@ -1,0 +1,114 @@
+{
+    "name": "Drving",
+    "maps": [
+        {
+            "name": "Driving",
+            "id": "1f2f3858-07c2-4a7e-b95f-3327f0f3551f",
+            "actions": [
+                {
+                    "name": "Steering",
+                    "type": "Value",
+                    "id": "ec18c9e2-1c05-419a-9f41-a2c29975b195",
+                    "expectedControlType": "Axis",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Gas",
+                    "type": "Value",
+                    "id": "edf4608f-75a8-4e89-b027-662aabc53eb8",
+                    "expectedControlType": "Axis",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Brake",
+                    "type": "Value",
+                    "id": "e4034ea7-a464-4be8-87a2-ed6205e46235",
+                    "expectedControlType": "Axis",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Reverse",
+                    "type": "Value",
+                    "id": "7a4ca339-ad2b-4537-86e5-6372087f617f",
+                    "expectedControlType": "Axis",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Clutch",
+                    "type": "Value",
+                    "id": "f19692b4-8dda-497f-8e8f-19dd2e5cc455",
+                    "expectedControlType": "Axis",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "ed773a36-4181-45e2-821b-800f0a259185",
+                    "path": "<Joystick>/stick/x",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Steering",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "e86e6fa0-d915-46d7-be7a-a9237c8186cb",
+                    "path": "<HID::Logitech G923 Racing Wheel for Xbox One and PC>/stick/down",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Gas",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "7dcf0820-6b46-46ca-8587-150fe09bfa55",
+                    "path": "<HID::Logitech G923 Racing Wheel for Xbox One and PC>/z",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Brake",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "011348d3-636a-4429-a095-3c03ab5a717e",
+                    "path": "<HID::Logitech G923 Racing Wheel for Xbox One and PC>/button6",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Reverse",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "fe57ec95-06ce-45dc-b966-bc84fafc7970",
+                    "path": "<HID::Logitech G923 Racing Wheel for Xbox One and PC>/rz",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Clutch",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}

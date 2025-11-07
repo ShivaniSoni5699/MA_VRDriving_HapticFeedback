@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 
@@ -82,7 +82,7 @@ public class SteeringWheelVisualizer : MonoBehaviour
         // Apply absolute rotation relative to the original pose
         float angle = _visualSteer * maxVisualSteerAngle * (invert ? -1f : 1f);
         Vector3 axis = rotateAround == Axis.X ? Vector3.right :
-                       rotateAround == Axis.Y ? Vector3.up    :
+                       rotateAround == Axis.Y ? Vector3.up :
                                                 Vector3.forward;
 
         transform.localRotation = _initialLocalRotation * Quaternion.AngleAxis(angle, axis);
@@ -91,7 +91,7 @@ public class SteeringWheelVisualizer : MonoBehaviour
     float ReadKeyboard()
     {
         float target = 0f;
-        if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))  target -= 1f;
+        if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) target -= 1f;
         if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) target += 1f;
 
         _kbSteer = Mathf.MoveTowards(_kbSteer, target, keyboardSteerSpeed * Time.deltaTime);
@@ -102,12 +102,12 @@ public class SteeringWheelVisualizer : MonoBehaviour
     {
         float v = 0f;
 
-        #if ENABLE_INPUT_SYSTEM
+#if ENABLE_INPUT_SYSTEM
         if (steeringAction != null && steeringAction.action != null)
         {
-            v = steeringAction.action.ReadValue<float>();   
+            v = steeringAction.action.ReadValue<float>();
         }
-        #endif
+#endif
 
         v = Mathf.Clamp(v, -1f, 1f);
 

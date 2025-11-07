@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.IO.Ports;
 using System.Globalization; // for invariant formatting of numbers
 
@@ -27,7 +27,7 @@ public class CarControlHaptics : MonoBehaviour
     [SerializeField, Tooltip("Rear-wheel drive if true; if false, all-wheel drive.")]
     private bool rearWheelDrive = true;
 
-    
+
 
 
     // -----------------------HAptics------------------------
@@ -41,17 +41,17 @@ public class CarControlHaptics : MonoBehaviour
 
     //Commented header and also changed public variables to private 
     //[Header("Send rate limiting")]
-    public float maxSendHz = 10f;
+    public float maxSendHz = 50f;
 
     //[Header("AMG GT R reference (real-world)")]
     private float accelForFullBack = 8.0f;   // ~0.87 g full throttle
     private float decelForFullPull = 9.8f;   // ~1.00 g full brake
     private float latForFullPull = 11.0f;  // ~1.14 g max corner
 
-    //[Header("Strength Caps")]
-    private float frontMax = 2.0f; // max forward pull belt
-    private float backMax = 1.3f; // max backward push motor
-    private float sideMax = 1.1f; // max side belt pull
+    [Header("Strength Caps Haptic Device")]
+    public float frontMax = 2.0f; // max forward pull belt
+    public float backMax = 2.0f; // max backward push motor
+    public float sideMax = 2.0f; // max side belt pull
 
 
     [Header("Vibration")]
@@ -77,7 +77,7 @@ public class CarControlHaptics : MonoBehaviour
     [Tooltip("Maps car speed --> vibration amplitude (engine/road rumble)")]
     public AnimationCurve speedToVibe = AnimationCurve.EaseInOut(0, 0, 1, 1);
 
-    
+
 
     // --- private runtime ---
     private SerialPort spFront, spBack, spLeft, spRight; //open serial connections to each device
@@ -89,38 +89,39 @@ public class CarControlHaptics : MonoBehaviour
     //Start(): open ports + init
     void Start()
     {
+        
         if (carRb == null)
         {
             Debug.LogError("[HAPTIC] Please assign carRb (Rigidbody).");
             enabled = false;
             return;
         }
-            accelToBack = new AnimationCurve(
-            new Keyframe(0.00f, 0.00f),
-            new Keyframe(0.10f, 0.20f),
-            new Keyframe(0.30f, 0.55f),
-            new Keyframe(0.50f, 0.85f),
-            new Keyframe(0.75f, 1.00f),
-            new Keyframe(1.00f,1.00f)
-        );
+        accelToBack = new AnimationCurve(
+        new Keyframe(0.00f, 0.00f),
+        new Keyframe(0.10f, 0.20f),
+        new Keyframe(0.30f, 0.55f),
+        new Keyframe(0.50f, 0.85f),
+        new Keyframe(0.75f, 1.00f),
+        new Keyframe(1.00f, 1.00f)
+    );
 
-            brakeToFront = new AnimationCurve(
-            new Keyframe(0f,   0f),   // no brake → no pull
-            new Keyframe(0.05f,0.20f),// tiny brake → already some pull
-            new Keyframe(0.30f,0.55f),
-            new Keyframe(0.60f,0.85f),
-            new Keyframe(1f,   1f)    // full brake → max pull
+        brakeToFront = new AnimationCurve(
+        new Keyframe(0f, 0f),   // no brake → no pull
+        new Keyframe(0.05f, 0.20f),// tiny brake → already some pull
+        new Keyframe(0.30f, 0.55f),
+        new Keyframe(0.60f, 0.85f),
+        new Keyframe(1f, 1f)    // full brake → max pull
 );
-            lateralToSide = new AnimationCurve(
-            new Keyframe(0f,0f), new Keyframe(0.20f,0.05f),
-            new Keyframe(0.50f,0.35f), new Keyframe(0.80f,0.85f),
-            new Keyframe(1f,1f)
-            );
-             speedToVibe = new AnimationCurve(
-            new Keyframe(0f,0f), new Keyframe(0.25f,0.10f),
-            new Keyframe(0.50f,0.30f), new Keyframe(0.80f,0.60f),
-            new Keyframe(1f,0.80f)
-            );
+        lateralToSide = new AnimationCurve(
+        new Keyframe(0f, 0f), new Keyframe(0.20f, 0.05f),
+        new Keyframe(0.50f, 0.35f), new Keyframe(0.80f, 0.85f),
+        new Keyframe(1f, 1f)
+        );
+        speedToVibe = new AnimationCurve(
+       new Keyframe(0f, 0f), new Keyframe(0.25f, 0.10f),
+       new Keyframe(0.50f, 0.30f), new Keyframe(0.80f, 0.60f),
+       new Keyframe(1f, 0.80f)
+       );
 
         // to remember current velocity so first frame accel is not huge
         prevVelocity = carRb.linearVelocity;
@@ -142,7 +143,7 @@ public class CarControlHaptics : MonoBehaviour
     void FixedUpdate()
     {
 
-
+        
 
         // 1) Acceleration a = dv/dt
         float dt = (Time.fixedDeltaTime > 0f) ? Time.fixedDeltaTime : 0.02f;
@@ -184,8 +185,8 @@ public class CarControlHaptics : MonoBehaviour
         RateLimitedSend(spBack, ref lastSendBack, backStrength, amplitude, frequency, "Back", aLong);
         RateLimitedSend(spLeft, ref lastSendLeft, leftStrength, amplitude, frequency, "Left", aLat);
         RateLimitedSend(spRight, ref lastSendRight, rightStrength, amplitude, frequency, "Right", aLat);
-        
-        
+
+
     }
 
     // Open a serial port; returns null if it fails (we keep running without it)
@@ -218,7 +219,7 @@ public class CarControlHaptics : MonoBehaviour
 
         // forces decimal(.) instead of (,)
         return string.Format(CultureInfo.InvariantCulture,
-            "{0:0.00};{1:0.00};{2:0.00};{3:0};0",
+            "{0:0.00};{1:0.00};{2:0.00};{3:0};0\n",
             force, damp, amplitude, Mathf.RoundToInt(frequency));
     }
 
@@ -227,7 +228,7 @@ public class CarControlHaptics : MonoBehaviour
                          float force, float amplitude, float frequency,
                          string deviceName, float accelShown)
     {
-        
+
         if (sp == null || !sp.IsOpen) return;
 
         float minInterval = 1f / Mathf.Max(1f, maxSendHz);

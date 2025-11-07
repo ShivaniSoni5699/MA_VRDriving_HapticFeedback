@@ -27,6 +27,7 @@ public class NewCarcontrol : MonoBehaviour
     [Header("Steering")]
     public float maxSteerAngle = 30f;
     public float steerReductionSpeed = 100f;
+    [Range(0.1f, 5f)] public float steersensitivity = 1f; // sensitivity
 
     [Header("Drive Layout")]
     public bool allWheelDrive = false;   // false = RWD, true = AWD
@@ -62,12 +63,13 @@ public class NewCarcontrol : MonoBehaviour
     void FixedUpdate()
     {
         // ----- read inputs -----
-        float gas=0f, brake=0f, steer=0f; bool reverse=false;
+        float gas = 0f, brake = 0f, steer = 0f; bool reverse = false;
 
         if (useInputSystem && inputSystemManager)
         {
             gas = Mathf.Clamp01(inputSystemManager.gasInput);
             brake = Mathf.Clamp01(inputSystemManager.brakeInput);
+            steer = Mathf.Clamp(inputSystemManager.steerInput, -1f, 1f);
             steer = Mathf.Clamp(inputSystemManager.steerInput, -1f, 1f);
             reverse = inputSystemManager.reverseButtonPressed;   // HOLD to reverse
         }
@@ -75,6 +77,8 @@ public class NewCarcontrol : MonoBehaviour
         {
             gas = Mathf.Clamp01(sdkInputManager.gasInput);
             brake = Mathf.Clamp01(sdkInputManager.brakeInput);
+            steer = Mathf.Clamp(sdkInputManager.steerInput, -1f, 1f);
+
             steer = Mathf.Clamp(sdkInputManager.steerInput, -1f, 1f);
             reverse = sdkInputManager.reverseButtonPressed;      // HOLD to reverse
         }
@@ -91,8 +95,8 @@ public class NewCarcontrol : MonoBehaviour
         float motorTorque = 0f;
         float brakeTorque = 0f;
 
-        bool isAccelerating = gas   > 0.1f;
-        bool isBraking      = brake > 0.1f;
+        bool isAccelerating = gas > 0.1f;
+        bool isBraking = brake > 0.1f;
 
         if (reverse)
         {
@@ -101,14 +105,14 @@ public class NewCarcontrol : MonoBehaviour
         }
         else
         {
-            if (isAccelerating) { motorTorque =  gas * motorForce;                  brakeTorque = 0f; }
-            else if (isBraking) { motorTorque = 0f;                                 brakeTorque = brake * brakeForce; }
+            if (isAccelerating) { motorTorque = gas * motorForce; brakeTorque = 0f; }
+            else if (isBraking) { motorTorque = 0f; brakeTorque = brake * brakeForce; }
         }
 
         // If trying to accelerate opposite to current motion, help with braking
         float forwardVel = Vector3.Dot(rigidbody.linearVelocity, transform.forward);
         if (!reverse && forwardVel < -0.5f && gas > 0.1f) brakeTorque = brakeForce;
-        if ( reverse && forwardVel >  0.5f && gas > 0.1f) brakeTorque = brakeForce;
+        if (reverse && forwardVel > 0.5f && gas > 0.1f) brakeTorque = brakeForce;
 
         ApplyDrive(motorTorque, brakeTorque);
 
@@ -126,7 +130,7 @@ public class NewCarcontrol : MonoBehaviour
 
     void ApplySteering(float steerAngle)
     {
-        if (FrontLeftWheel)  FrontLeftWheel.steerAngle  = steerAngle;
+        if (FrontLeftWheel) FrontLeftWheel.steerAngle = steerAngle;
         if (FrontRightWheel) FrontRightWheel.steerAngle = steerAngle;
     }
 
@@ -134,31 +138,31 @@ public class NewCarcontrol : MonoBehaviour
     {
         if (allWheelDrive)
         {
-            if (FrontLeftWheel)  FrontLeftWheel.motorTorque  = perWheelMotor;
+            if (FrontLeftWheel) FrontLeftWheel.motorTorque = perWheelMotor;
             if (FrontRightWheel) FrontRightWheel.motorTorque = perWheelMotor;
-            if (RearLeftWheel)   RearLeftWheel.motorTorque   = perWheelMotor;
-            if (RearRightWheel)  RearRightWheel.motorTorque  = perWheelMotor;
+            if (RearLeftWheel) RearLeftWheel.motorTorque = perWheelMotor;
+            if (RearRightWheel) RearRightWheel.motorTorque = perWheelMotor;
         }
         else
         {
-            if (FrontLeftWheel)  FrontLeftWheel.motorTorque  = 0f;
+            if (FrontLeftWheel) FrontLeftWheel.motorTorque = 0f;
             if (FrontRightWheel) FrontRightWheel.motorTorque = 0f;
-            if (RearLeftWheel)   RearLeftWheel.motorTorque   = perWheelMotor;
-            if (RearRightWheel)  RearRightWheel.motorTorque  = perWheelMotor;
+            if (RearLeftWheel) RearLeftWheel.motorTorque = perWheelMotor;
+            if (RearRightWheel) RearRightWheel.motorTorque = perWheelMotor;
         }
 
-        if (FrontLeftWheel)  FrontLeftWheel.brakeTorque  = brakeTorque;
+        if (FrontLeftWheel) FrontLeftWheel.brakeTorque = brakeTorque;
         if (FrontRightWheel) FrontRightWheel.brakeTorque = brakeTorque;
-        if (RearLeftWheel)   RearLeftWheel.brakeTorque   = brakeTorque;
-        if (RearRightWheel)  RearRightWheel.brakeTorque  = brakeTorque;
+        if (RearLeftWheel) RearLeftWheel.brakeTorque = brakeTorque;
+        if (RearRightWheel) RearRightWheel.brakeTorque = brakeTorque;
     }
 
     void ApplyExtraBrake(float extraBrakeTorque)
     {
         if (extraBrakeTorque <= 0f) return;
-        if (FrontLeftWheel)  FrontLeftWheel.brakeTorque  += extraBrakeTorque;
+        if (FrontLeftWheel) FrontLeftWheel.brakeTorque += extraBrakeTorque;
         if (FrontRightWheel) FrontRightWheel.brakeTorque += extraBrakeTorque;
-        if (RearLeftWheel)   RearLeftWheel.brakeTorque   += extraBrakeTorque;
-        if (RearRightWheel)  RearRightWheel.brakeTorque  += extraBrakeTorque;
+        if (RearLeftWheel) RearLeftWheel.brakeTorque += extraBrakeTorque;
+        if (RearRightWheel) RearRightWheel.brakeTorque += extraBrakeTorque;
     }
 }

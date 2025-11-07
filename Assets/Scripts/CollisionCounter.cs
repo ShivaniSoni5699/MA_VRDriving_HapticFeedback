@@ -41,6 +41,6 @@ public class PlayCollisionSummary : MonoBehaviour
         Debug.Log($"[PlayCollisionSummary] {sessionId}: collisions={count} -> {_path} ({reason})");
     }
 
-    void OnDisable()         { if (Application.isPlaying) EndPlay("component_disabled"); }
+    void OnDisable() { if (Application.isPlaying) EndPlay("component_disabled"); }
     void OnApplicationQuit() { EndPlay("application_quit"); }
 }

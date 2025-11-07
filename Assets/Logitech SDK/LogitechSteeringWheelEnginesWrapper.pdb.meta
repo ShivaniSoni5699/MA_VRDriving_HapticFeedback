@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1bdc8b908d544014fbbf505e55b07d20
+timeCreated: 1508201583
+licenseType: Store
+DefaultImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 6630
+  packageName: Logitech Gaming SDK
+  packageVersion: 1.7
+  assetPath: Assets/Logitech SDK/LogitechSteeringWheelEnginesWrapper.pdb
+  uploadId: 723636
