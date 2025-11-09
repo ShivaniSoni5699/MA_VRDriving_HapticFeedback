@@ -29,3 +29,10 @@ DerivedData/
 !ProjectSettings/
 !Packages/
 !*.meta
+# Unity baked GI / lighting
+**/LightingData.asset
+**/OcclusionCullingData.asset
+**/Lightmap-*.exr
+**/Lightmap-*.png
+**/ReflectionProbe-*.exr
+**/ReflectionProbe-*.png
