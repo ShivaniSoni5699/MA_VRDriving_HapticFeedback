@@ -2,7 +2,7 @@
 
 A Unity VR driving simulator developed for my master’s thesis at the University of Stuttgart. The project combines physical driving controls, headset tracking and custom haptic hardware to investigate how feedback affects perceived realism, immersion, comfort and simulator sickness.
 
-![VR driving simulator and hardware setup](vr-driving-simulator.png)
+![VR driving simulator and hardware setup](Assets/vr-driving-simulator.png)
 
 ## Project Overview
 
